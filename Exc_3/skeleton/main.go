@@ -24,7 +24,7 @@ var embeddedFrontend embed.FS
 
 // @title				Order System
 // @description			This system enables drink orders and should not be used for the forbidden Hungover Games.
-// @contact.name		Your Name
+// @contact.name		Marco Hartl
 func main() {
 	db := repository.NewDatabaseHandler()
 	r := chi.NewRouter()
@@ -53,3 +53,5 @@ func main() {
 		log.Fatal(err)
 	}
 }
+
+// http://localhost:3000/openapi/index.html
