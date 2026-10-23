@@ -7,11 +7,15 @@ type DatabaseHandler struct {
 	orders []model.Order
 }
 
+// NewDatabaseHandler initializes the database handler with test data
 func NewDatabaseHandler() *DatabaseHandler {
+	// Init the drinks slice with some test data
 	drinks := []model.Drink{
 		{ID: 1, Name: "Espresso", Description: "Strong and small", Price: 2.5},
 		{ID: 2, Name: "Latte", Description: "Milky coffee", Price: 3.8},
 	}
+
+	// Init orders slice with some test data
 	orders := []model.Order{}
 
 	return &DatabaseHandler{
@@ -28,6 +32,7 @@ func (db *DatabaseHandler) GetOrders() []model.Order {
 	return db.orders
 }
 
+// GetTotalledOrders calculates total orders by drink ID
 func (db *DatabaseHandler) GetTotalledOrders() map[uint64]uint64 {
 	totalledOrders := make(map[uint64]uint64)
 	for _, order := range db.orders {
