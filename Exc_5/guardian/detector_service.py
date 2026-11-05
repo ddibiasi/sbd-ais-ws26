@@ -9,6 +9,7 @@ model.anomaly_event(reading, score), as JSON, published to the topic
     python3 detector_service.py --name det-1
     python3 detector_service.py --name det-2          # one more instance
 """
+
 import argparse
 import json
 import time
@@ -19,26 +20,43 @@ from model import BearingModel
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--name", default="det-1", help="instance name (shows up in the scoreboard)")
-ap.add_argument("--in-topic", default=None, help="TODO: the topic your gateways write to")
-ap.add_argument("--group", default=None, help="TODO: the consumer group of this detector")
+ap.add_argument("--in-topic", default="readings")
+ap.add_argument("--group", default="detector")
 ap.add_argument("--out-topic", default="anomalies")
 ap.add_argument("--bootstrap", default="localhost:9092")
 args = ap.parse_args()
-if not args.in_topic or not args.group:
-    raise SystemExit("TODO: set --in-topic and --group (or give them defaults above)")
 
 model = BearingModel(instance=args.name)
 consumer = Consumer({
     "bootstrap.servers": args.bootstrap,
     "group.id": args.group,
     "client.id": args.name,
-    "auto.offset.reset": "latest",     # TODO: why "latest" and not "earliest" for a live detector?
+    "auto.offset.reset": "latest",
 })
 producer = Producer({
     "bootstrap.servers": args.bootstrap,
-    # TODO: more settings?
+    "enable.idempotence": True,
+    "acks": "all",
+    "linger.ms": 20,
 })
-consumer.subscribe([args.in_topic])
+
+machine_partition = {}
+
+
+def on_assign(c, partitions):
+    print(f"[{args.name}] assigned partitions: {sorted(p.partition for p in partitions)}", flush=True)
+
+
+def on_revoke(c, partitions):
+    revoked = {p.partition for p in partitions}
+    for machine, part in list(machine_partition.items()):
+        if part in revoked:
+            model.forget(machine)
+            del machine_partition[machine]
+    print(f"[{args.name}] revoked partitions: {sorted(revoked)}", flush=True)
+
+
+consumer.subscribe([args.in_topic], on_assign=on_assign, on_revoke=on_revoke)
 print(f"[{args.name}] {args.in_topic} -> {args.out_topic} (Ctrl+C to stop)", flush=True)
 
 readings = anomalies = 0
@@ -52,12 +70,13 @@ try:
             print(f"[{args.name}] {msg.error()}")
             continue
         reading = json.loads(msg.value())
+        machine_partition[reading["machine_id"]] = msg.partition()
         score = model.score(reading)
         readings += 1
         if score is not None and score >= model.threshold:
             anomalies += 1
             event = model.anomaly_event(reading, score)
-            producer.produce(args.out_topic, key=None,       # TODO: which key?
+            producer.produce(args.out_topic, key=reading["machine_id"].encode(),
                              value=json.dumps(event))
         producer.poll(0)
         if time.time() >= report_at:
