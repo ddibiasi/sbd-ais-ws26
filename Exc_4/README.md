@@ -51,3 +51,6 @@ you can use [lazydocker](https://github.com/jesseduffield/lazydocker).
 
 Docker commands are documented here: [Docker](https://docs.docker.com/reference/cli/docker/) ([Cheatsheet](https://docs.docker.com/get-started/docker_cheatsheet.pdf))
 
+
+lazydocker
+
