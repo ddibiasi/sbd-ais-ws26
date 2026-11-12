@@ -1,6 +1,6 @@
-"""The anomaly detector as a Kafka service. YOUR CODE (Part 2, Stage C2).
+"""The anomaly detector as a Kafka service.  CODE (Part 2, Stage C2).
 
-The plumbing is here, the decisions (marked TODO) are yours. Contract with
+The plumbing is here, the decisions (marked TODO). Contract with
 the maintenance team: every reading goes through model.score(); every
 reading with score >= model.threshold becomes ONE anomaly event,
 model.anomaly_event(reading, score), as JSON, published to the topic
