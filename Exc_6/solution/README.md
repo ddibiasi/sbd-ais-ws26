@@ -152,3 +152,167 @@ If nobody checked them, then the setup would run like in run 1. Only one velocti
 Additionaly if someone would add more partitions, then the problem with the wrong key and therfore the mixed distribution of the data comes into play.
 
 The team can notice by looking at the results and the delay, or in general at anything that shows the result or/and the delay. Then the team would immediately see that something is not right.
+
+
+
+# Optional Part
+
+
+## Step 1 — A replicated topic
+
+```
+Topic: payments TopicId: Ve0F8624SOqwEPWk3Qhpag PartitionCount: 3       ReplicationFactor: 3    Configs: min.insync.replicas=2
+        Topic: payments Partition: 0    Leader: 3       Replicas: 3,1,2 Isr: 3,1,2      Elr:    LastKnownElr: 
+        Topic: payments Partition: 1    Leader: 1       Replicas: 1,2,3 Isr: 1,2,3      Elr:    LastKnownElr: 
+        Topic: payments Partition: 2    Leader: 2       Replicas: 2,3,1 Isr: 2,3,1      Elr:    LastKnownElr:
+```
+
+
+## Step 2 — Write with acks=all
+```
+payments:0:0
+payments:1:0
+payments:2:4
+```
+
+All messages in one partition
+
+## Step 3 — One broker fails
+```
+Topic: payments Partition: 0    Leader: 3       Replicas: 3,1,2 Isr: 3,2        Elr:    LastKnownElr: 
+Topic: payments Partition: 1    Leader: 2       Replicas: 1,2,3 Isr: 2,3        Elr:    LastKnownElr: 
+Topic: payments Partition: 2    Leader: 2       Replicas: 2,3,1 Isr: 2,3        Elr:    LastKnownElr: 
+```
+### Produce again with acks=all (step 2) and count the records.
+
+```
+payments:0:11
+payments:1:0
+payments:2:4
+```
+
+All the new messages go to partition 0
+
+
+### Who leads partition 0 now? How long did the failover take? Did the producer notice anything?
+
+Broker 3 leads partition 0 now.
+
+Takeover was immediately
+
+The producer didn't notice as: min.insync.replicas=2
+
+
+## Step 4 — Two brokers fail
+
+```
+Topic: payments Partition: 0    Leader: 3       Replicas: 3,1,2 Isr: 3  Elr: 2  LastKnownElr: 
+Topic: payments Partition: 1    Leader: 3       Replicas: 1,2,3 Isr: 3  Elr: 2  LastKnownElr: 
+Topic: payments Partition: 2    Leader: 3       Replicas: 2,3,1 Isr: 3  Elr: 2  LastKnownElr: 
+```
+
+Broker 3 now leads every partition.
+
+
+### produce with acks=1 (--producer-property acks=1); does the producer report an error?
+No as it only needs a conformation from the leading broker.
+
+
+### count the records (step 2) and read the topic (Ctrl+C to stop):
+
+payments:0:11
+payments:1:0
+payments:2:4
+
+The new messages are not there
+
+### Where are your acks=1 records? Look inside broker-3's log files:
+They are stored locally in broker-3. Because it was accepted after it wrote the data to itself.
+
+### The difference between written to the leader's log and visible to consumers. Compare the offsets of step 4.3 with what you find in the log files.
+Written to the leader's log: The leader broker records the acks=1 messages directly to its local disk file.  
+
+Visible to consumers: Consumers cannot see them because the High Watermark remains frozen until followers come back online and replicate the data. 
+
+## Step 5 — Recovery
+
+### broker-2
+```
+Topic: payments Partition: 0    Leader: 3       Replicas: 3,1,2 Isr: 3,2        Elr:    LastKnownElr: 
+Topic: payments Partition: 1    Leader: 3       Replicas: 1,2,3 Isr: 3,2        Elr:    LastKnownElr: 
+Topic: payments Partition: 2    Leader: 3       Replicas: 2,3,1 Isr: 3,2        Elr:    LastKnownElr: 
+```
+```
+payments:0:11
+payments:1:5
+payments:2:4
+```
+All messages are there.
+
+#### What happened to the acks=1 records of step 4?
+When broker-2 started back up, it caught up by replicating those acks=1 records from the leader (broker-3), meaning they were safely copied to the newly recovered in-sync replica.   
+
+#### Which component decided that they may now be read?
+The leader broker (broker-3) decided they could now be read by advancing the High Watermark (HW) once the followers rejoined the In-Sync Replicas (ISR) and confirmed replication.
+
+### broker-1
+
+After starting broker-1 and rebalincing the leaders are back as before.
+
+```
+Topic: payments Partition: 0    Leader: 3       Replicas: 3,1,2 Isr: 3,2,1      Elr:    LastKnownElr: 
+Topic: payments Partition: 1    Leader: 1       Replicas: 1,2,3 Isr: 3,2,1      Elr:    LastKnownElr: 
+Topic: payments Partition: 2    Leader: 2       Replicas: 2,3,1 Isr: 3,2,1      Elr:    LastKnownElr: 
+```
+
+## Step 6 — The price of durability
+
+### acks = 0
+
+300000 records sent, 275229.4 records/sec (52.50 MB/sec), 172.79 ms avg latency, 271.00 ms max latency, 181 ms 50th, 230 ms 95th, 235 ms 99th, 239 ms 99.9th.
+
+### acks = 1
+300000 records sent, 249376.6 records/sec (47.56 MB/sec), 244.43 ms avg latency, 339.00 ms max latency, 259 ms 50th, 324 ms 95th, 334 ms 99th, 338 ms 99.9th.
+
+### acks = all
+300000 records sent, 173913.0 records/sec (33.17 MB/sec), 457.79 ms avg latency, 759.00 ms max latency, 447 ms 50th, 733 ms 95th, 752 ms 99th, 757 ms 99.9th.
+
+
+With acks = all we loose performance but get saftey.
+
+
+## Results sheet
+
+
+| Step | Brokers running | Leaders (P0, P1, P2) | ISR of P0 | `acks=all` accepted? | `acks=1` accepted? | `acks=1` records readable? |
+|---|---|---|---|---|---|---|
+| 2 | 1, 2, 3 | 3, 1, 2 | 3, 1, 2 | Yes | – | – |
+| 3 | 2, 3 | 3, 2, 2 | 3, 2 | Yes | – | – |
+| 4 | 3 | 3, 3, 3 | 3 | No | Yes | No |
+| 5 | 2, 3 | 3, 3, 3 | 3, 2 | – | – | Yes |
+
+| `acks` | records/sec | avg latency (ms) | 99th percentile (ms) |
+|---|---|---|---|
+| 0 | 275,229.4 | 172.79 | 235 |
+| 1 | 249,376.6 | 244.43 | 334 |
+| all | 173,913.0 | 457.79 | 752 |
+
+
+## Check yourself
+
+### With RF 3 and `min.insync.replicas=2`, how many brokers can fail before `acks=all` producers get errors? And before data is lost?
+One broker can fail before acks=all producers get errors, and two can fail before data is lost.
+
+### Why did `acks=1` look successful in step 4, and why is that misleading?
+It looked successful because the single surviving leader accepted the write locally, but it was misleading because no replicas were alive to back up the data, risking permanent loss if that leader crashed.
+
+### What would happen with `min.insync.replicas=1` in step 4?
+An acks=all producer would continue to succeed even with two brokers down because a minimum requirement of one in-sync replica is satisfied by the leader alone.
+
+### Which `acks` setting would you choose for the fraud transactions of *Card Sentinel* (Exercise 6), and which for website click events? Why?
+I would choose acks=all for fraud transactions to guarantee zero data loss.
+
+And acks=0 or acks=1 for website clicks where high throughput matters more than losing some click data.
+
+### Why are the numbers of step 6 optimistic compared with a real cluster spread over several machines or availability zones?
+The step 6 numbers are optimistic because all brokers and the producer run locally on the same machine via Docker, avoiding the network latency and physical switch overhead of a real environment.
