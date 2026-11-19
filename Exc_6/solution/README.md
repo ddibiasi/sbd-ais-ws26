@@ -3,6 +3,9 @@
 ## Part 1: The Decision Paragraph
 For this scenario, **Option 4 (Log-based CDC via Debezium)** is the correct choice. Because the payment path belongs to another certified team, we cannot modify `card_processor.py` (ruling out Dual Write and Outbox patterns). Option 1 (Polling) imposes heavy query load on the system of record and risks missing out-of-order commits. Log-based CDC reads PostgreSQL's write-ahead log (WAL) entirely outside the application layer, satisfying **R1** (system of record untouched) and **R2** (every payment delivered reliably in order) with zero application code changes. Its primary cost is a replication slot that retains WAL data if consumers lag or crash, risking disk space exhaustion if unmonitored. We would monitor disk usage and replication lag via Prometheus/Grafana to catch issues before disk saturation stops the database. If our team owned the payment path, we would choose **Option 3 (Outbox pattern)** for native transactional safety.
 
+<img width="808" height="575" alt="image" src="https://github.com/user-attachments/assets/5e917b33-d593-4ca2-8c93-7ad2657ca1c8" />
+
+
 ---
 
 ## Part 2: The Pipeline in Three Runs
