@@ -3,7 +3,12 @@
 ## Part 1: The Decision Paragraph
 For this scenario, **Option 4 (Log-based CDC via Debezium)** is the correct choice. Because the payment path belongs to another certified team, we cannot modify `card_processor.py` (ruling out Dual Write and Outbox patterns). Option 1 (Polling) imposes heavy query load on the system of record and risks missing out-of-order commits. Log-based CDC reads PostgreSQL's write-ahead log (WAL) entirely outside the application layer, satisfying **R1** (system of record untouched) and **R2** (every payment delivered reliably in order) with zero application code changes. Its primary cost is a replication slot that retains WAL data if consumers lag or crash, risking disk space exhaustion if unmonitored. We would monitor disk usage and replication lag via Prometheus/Grafana to catch issues before disk saturation stops the database. If our team owned the payment path, we would choose **Option 3 (Outbox pattern)** for native transactional safety.
 
-<img width="808" height="575" alt="image" src="https://github.com/user-attachments/assets/5e917b33-d593-4ca2-8c93-7ad2657ca1c8" />
+| Option | Simple Explanation | Problem |
+|----------|-------------------|---------|
+| **Polling** | Every few seconds, a service asks the database: "Has anything changed?" | Creates unnecessary database load because it constantly checks for updates. It can also miss the true order of transactions if commits happen at different times. |
+| **Dual Write** | When the application saves a payment, it also sends an event/message. | Requires modifying the critical payment process. If one action succeeds and the other fails, data can become inconsistent. |
+| **Outbox Pattern** | The application writes both the payment data and an event to a special outbox table. Another service later publishes the event. | Reliable, but requires changes to the application code and database schema. |
+| **Log-based CDC (Debezium)** | Debezium reads the database transaction log and automatically detects committed changes. | Requires CDC infrastructure, but avoids application changes and provides reliable event ordering. |
 
 
 ---
