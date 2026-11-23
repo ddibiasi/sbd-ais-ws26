@@ -1,4 +1,4 @@
-"""The anomaly detector as a Kafka service.  CODE (Part 2, Stage C2).
+"""The anomaly detector as a Kafka service. CODE (Part 2, Stage C2).
 
 The plumbing is here, the decisions (marked TODO). Contract with
 the maintenance team: every reading goes through model.score(); every
