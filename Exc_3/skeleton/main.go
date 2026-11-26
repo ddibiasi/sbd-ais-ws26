@@ -23,6 +23,7 @@ import (
 var embeddedFrontend embed.FS
 
 // @title				Order System
+// @version 1.0
 // @description			This system enables drink orders and should not be used for the forbidden Hungover Games.
 // @contact.name		Your Name
 func main() {

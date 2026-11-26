@@ -3,18 +3,20 @@ package repository
 import "ordersystem/model"
 
 type DatabaseHandler struct {
-	// drinks represent all available drinks
 	drinks []model.Drink
-	// orders serves as order history
 	orders []model.Order
 }
 
-// todo
+// NewDatabaseHandler initializes the database handler with test data
 func NewDatabaseHandler() *DatabaseHandler {
 	// Init the drinks slice with some test data
-	// drinks := ...
+	drinks := []model.Drink{
+		{ID: 1, Name: "Espresso", Description: "Strong and small", Price: 2.5},
+		{ID: 2, Name: "Latte", Description: "Milky coffee", Price: 3.8},
+	}
 
 	// Init orders slice with some test data
+	orders := []model.Order{}
 
 	return &DatabaseHandler{
 		drinks: drinks,
@@ -30,15 +32,15 @@ func (db *DatabaseHandler) GetOrders() []model.Order {
 	return db.orders
 }
 
-// todo
+// GetTotalledOrders calculates total orders by drink ID
 func (db *DatabaseHandler) GetTotalledOrders() map[uint64]uint64 {
-	// calculate total orders
-	// key = DrinkID, value = Amount of orders
-	// totalledOrders map[uint64]uint64
+	totalledOrders := make(map[uint64]uint64)
+	for _, order := range db.orders {
+		totalledOrders[order.DrinkID] += order.Amount
+	}
 	return totalledOrders
 }
 
 func (db *DatabaseHandler) AddOrder(order *model.Order) {
-	// todo
-	// add order to db.orders slice
+	db.orders = append(db.orders, *order)
 }
